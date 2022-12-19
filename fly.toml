@@ -1,0 +1,33 @@
+# fly.toml file generated for canvas-hub-daemon on 2022-12-19T10:47:10-05:00
+
+app = "canvas-hub-daemon"
+kill_signal = "SIGINT"
+kill_timeout = 30
+processes = []
+
+[env]
+  PORT = "8000"
+  LISTEN = "4002"
+  ANNOUNCE = "/dns4/canvas-hub-daemon.fly.dev/tcp/4002/ws"
+  CANVAS_HOME = "/data"
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[metrics]
+  path = "/metrics"
+  port = 9091
+
+[[services]]
+  internal_port = 4002
+  processes = ["app"]
+  protocol = "tcp"
+  [services.concurrency]
+    hard_limit = 100
+    soft_limit = 100
+    type = "connections"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 4002
