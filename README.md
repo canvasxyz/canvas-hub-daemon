@@ -3,6 +3,9 @@
 If you can't successfully `ping6 canvas-hub-daemon.internal` after joining the Wireguard VPN it's probably because your ISP doesn't support IPv6 and that's confusing macos into thinking it can't resolve v6 addresses even though it really can. You can `dig canvas-hub-daemon.internal` to resolve the instance's internal address and use that instead. The internal address changes between deployments.
 
 ```
+% ping6 canvas-hub-daemon
+ping6: getaddrinfo -- nodename nor servname provided, or not known
+%
 % dig canvas-hub-daemon.internal aaaa +noall +answer
 
 ; <<>> DiG 9.10.6 <<>> canvas-hub-daemon.internal aaaa +noall +answer
