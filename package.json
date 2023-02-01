@@ -4,7 +4,7 @@
 	"version": "0.0.0",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"start": "canvas daemon --port $PORT --listen $LISTEN --announce $ANNOUNCE --chain-rpc eth $ETH_CHAIN_ID $ETH_CHAIN_RPC"
+		"start": "canvas daemon --metrics --port $PORT --listen $LISTEN --announce $ANNOUNCE"
 	},
 	"repository": {
 		"type": "git",
@@ -16,6 +16,6 @@
 	},
 	"homepage": "https://github.com/canvasxyz/canvas-hub-daemon#readme",
 	"dependencies": {
-		"@canvas-js/cli": "0.0.35"
+		"@canvas-js/cli": "0.0.49"
 	}
 }
