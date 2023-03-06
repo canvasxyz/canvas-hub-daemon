@@ -1,0 +1,14 @@
+{
+	"include": ["src", "types"],
+	"compilerOptions": {
+		"outDir": "dist",
+		"strict": true,
+		"declaration": false,
+		"module": "es2022",
+		"target": "es2020",
+		"moduleResolution": "node16",
+		"removeComments": true,
+		"allowSyntheticDefaultImports": true,
+		"skipLibCheck": true
+	}
+}
