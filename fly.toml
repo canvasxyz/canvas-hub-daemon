@@ -7,8 +7,6 @@ processes = []
 
 [env]
   PORT = "8000"
-  LISTEN = "4002"
-  ANNOUNCE = "/dns4/canvas-hub-daemon.fly.dev/tcp/4002/ws"
   CANVAS_HOME = "/data"
 
 [mounts]
@@ -20,14 +18,15 @@ processes = []
   port = 8000
 
 [[services]]
-  internal_port = 4002
+  internal_port = 8080
   processes = ["app"]
   protocol = "tcp"
   [services.concurrency]
-    hard_limit = 100
+    hard_limit = 1000
     soft_limit = 100
     type = "connections"
 
   [[services.ports]]
     handlers = ["http"]
-    port = 4002
+    start_port = 49152
+    end_port = 65535
