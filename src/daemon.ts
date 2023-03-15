@@ -17,7 +17,7 @@ import { VM } from "@canvas-js/core/components/vm"
 import { SPEC_FILENAME } from "@canvas-js/core/constants"
 import type { ChainImplementation, Model } from "@canvas-js/interfaces"
 
-import { CANVAS_HOME, getRandomPort } from "./utils.js"
+import { CANVAS_HOME } from "./utils.js"
 
 type Status = "running" | "stopped"
 
@@ -30,14 +30,16 @@ type AppData = {
   actions?: string[]
 }
 
-const { FLY_APP_NAME } = process.env
+const { FLY_APP_NAME, START_PORT, END_PORT } = process.env
 
 export class Daemon {
   public readonly app = express()
   public readonly server: http.Server & stoppable.WithStop
 
   private readonly queue = new PQueue({ concurrency: 1 })
-  private readonly apps = new Map<string, { core: Core; api: express.Express }>()
+  private readonly apps = new Map<string, { port?: number; core: Core; api: express.Express }>()
+  private readonly portMap = new Map<number, string>()
+  private lastAllocatedPort = NaN
 
   public constructor(
     private readonly chains: ChainImplementation[],
@@ -145,10 +147,25 @@ export class Daemon {
         const spec = fs.readFileSync(specPath, "utf-8")
 
         try {
-          const listen = await getRandomPort()
-
+          let listen: number | undefined = undefined
           let announce: string[] | undefined = undefined
-          if (typeof FLY_APP_NAME === "string") {
+          if (FLY_APP_NAME && START_PORT && END_PORT) {
+            const [start, end] = [parseInt(START_PORT), parseInt(END_PORT)]
+            listen = this.lastAllocatedPort || start
+            let loop = false
+            while (this.portMap.has(listen)) {
+              listen += 1
+              if (listen > end) {
+                if (loop) {
+                  throw new Error("could not assign port")
+                } else {
+                  loop = true
+                  listen = start
+                }
+              }
+            }
+
+            this.lastAllocatedPort = listen
             announce = [`/dns4/${FLY_APP_NAME}.fly.dev/tcp/${listen}/ws`]
           }
 
@@ -161,7 +178,11 @@ export class Daemon {
             exposeMessages: true,
           })
 
-          this.apps.set(name, { core, api })
+          this.apps.set(name, { port: listen, core, api })
+          if (listen) {
+            this.portMap.set(listen, name)
+          }
+
           res.status(StatusCodes.OK).end()
         } catch (err) {
           if (err instanceof Error) {
@@ -194,6 +215,9 @@ export class Daemon {
           }
         } finally {
           this.apps.delete(name)
+          if (app.port) {
+            this.portMap.delete(app.port)
+          }
         }
       })
     })

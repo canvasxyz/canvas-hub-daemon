@@ -60,7 +60,7 @@ if (FLY_APP_NAME !== undefined && PROXY_PORT !== undefined) {
     })
   })
 
-  server.listen(parseInt(PROXY_PORT), () => console.log(`Proxy server listening on http://localhost:${PROXY_PORT}`))
+  server.listen(parseInt(PROXY_PORT), () => console.log(`[canvas-hub-daemon] Proxy server listening on http://localhost:${PROXY_PORT}`))
 
   controller.signal.addEventListener("abort", () => {
     server.close()

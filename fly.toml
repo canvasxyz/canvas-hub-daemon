@@ -8,6 +8,8 @@ processes = []
 [env]
   PORT = "8000"
   PROXY_PORT = "8001"
+  START_PORT = "49152"
+  END_PORT = "57344"
   CANVAS_HOME = "/data"
 
 [mounts]

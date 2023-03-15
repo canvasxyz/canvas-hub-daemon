@@ -14,16 +14,3 @@ for (const name of fs.readdirSync(CANVAS_HOME)) {
   }
 }
 
-export function getRandomPort(): Promise<number> {
-  const server = net.createServer()
-  return new Promise((resolve, reject) =>
-    server.listen(0, () => {
-      const address = server.address()
-      if (address === null || typeof address == "string") {
-        reject(new Error("unexpected net.server address"))
-      } else {
-        server.close((err) => err ? reject(err) : resolve(address.port))
-      }
-    })
-  )
-}
