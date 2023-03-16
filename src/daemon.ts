@@ -56,7 +56,7 @@ export class Daemon {
         colorize: false,
 
         // /app/ is noisy, so don't log it
-        ignoreRoute: (req, res) => req.path == "/app/" && res.statusCode == StatusCodes.OK,
+        ignoreRoute: (req, res) => req.path === "/app/" && res.statusCode == StatusCodes.OK,
       })
     )
 
