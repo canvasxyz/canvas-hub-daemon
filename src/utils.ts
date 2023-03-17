@@ -13,4 +13,3 @@ for (const name of fs.readdirSync(CANVAS_HOME)) {
     continue
   }
 }
-
