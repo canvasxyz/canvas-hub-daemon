@@ -37,7 +37,10 @@ export class Daemon {
   public readonly server: http.Server & stoppable.WithStop
 
   private readonly queue = new PQueue({ concurrency: 1 })
-  private readonly apps = new Map<string, { port?: number; core: Core; api: express.Express }>()
+  private readonly apps = new Map<
+    string,
+    { port?: number; core: Core; api: express.Express }
+  >()
   private readonly portMap = new Map<number, string>()
   private lastAllocatedPort = NaN
 
@@ -56,7 +59,8 @@ export class Daemon {
         colorize: false,
 
         // /app/ is noisy, so don't log it
-        ignoreRoute: (req, res) => req.path === "/app/" && res.statusCode == StatusCodes.OK,
+        ignoreRoute: (req, res) =>
+          req.path === "/app/" && res.statusCode == StatusCodes.OK,
       })
     )
 
@@ -65,6 +69,7 @@ export class Daemon {
         const apps: Record<string, AppData> = {}
         for (const name of fs.readdirSync(CANVAS_HOME)) {
           const specPath = path.resolve(CANVAS_HOME, name, SPEC_FILENAME)
+          if (name === ".keep") continue
           if (fs.existsSync(specPath)) {
             const spec = fs.readFileSync(specPath, "utf-8")
             const cid = await Hash.of(spec)
@@ -73,12 +78,21 @@ export class Daemon {
             const app = this.apps.get(name)
             if (app) {
               const { appName, models, actions } = app.core.vm
-              apps[name] = { uri, cid, status: "running", appName, models, actions }
+              apps[name] = {
+                uri,
+                cid,
+                status: "running",
+                appName,
+                models,
+                actions,
+              }
             } else {
               apps[name] = { uri, cid, status: "stopped" }
             }
           } else {
-            console.warn(`[canvas-core-daemon] unexpected file in home directory: ${name}`)
+            console.warn(
+              `[canvas-core-daemon] unexpected file in home directory: ${name}`
+            )
           }
         }
 
@@ -169,7 +183,14 @@ export class Daemon {
             announce = [`/dns4/${FLY_APP_NAME}.fly.dev/tcp/${listen}/ws`]
           }
 
-          const core = await Core.initialize({ directory, spec, chains: this.chains, listen, announce, ...options })
+          const core = await Core.initialize({
+            directory,
+            spec,
+            chains: this.chains,
+            listen,
+            announce,
+            ...options,
+          })
           console.log(`[canvas-hub-daemon] Started ${name} (${core.app})`)
 
           const api = getAPI(core, {
@@ -276,7 +297,9 @@ export class Daemon {
 
   public listen(port: number) {
     this.server.listen(port, () => {
-      console.log(`[canvas-hub-daemon] Serving Daemon API on http://127.0.0.1:${port}/`)
+      console.log(
+        `[canvas-hub-daemon] Serving Daemon API on http://127.0.0.1:${port}/`
+      )
     })
   }
 
@@ -284,8 +307,10 @@ export class Daemon {
     console.log("[canvas-hub-daemon] Waiting for queue to clear")
     await this.queue.onIdle()
     console.log("[canvas-hub-daemon] Stopping running apps")
-    await Promise.all(([...this.apps.values()].map(({ core }) => core.close())))
+    await Promise.all([...this.apps.values()].map(({ core }) => core.close()))
     console.log("[canvas-hub-daemon] Stopping Daemon API server")
-    await new Promise<void>((resolve, reject) => this.server.stop((err) => err ? reject(err) : resolve()))
+    await new Promise<void>((resolve, reject) =>
+      this.server.stop((err) => (err ? reject(err) : resolve()))
+    )
   }
 }
