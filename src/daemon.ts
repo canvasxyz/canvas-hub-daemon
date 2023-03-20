@@ -35,13 +35,14 @@ const { FLY_APP_NAME, START_PORT, END_PORT } = process.env
 export class Daemon {
   public readonly app = express()
   public readonly server: http.Server & stoppable.WithStop
-
-  private readonly queue = new PQueue({ concurrency: 1 })
-  private readonly apps = new Map<
+  public readonly portMap = new Map<number, string>()
+  public readonly apps = new Map<
     string,
     { port?: number; core: Core; api: express.Express }
   >()
-  private readonly portMap = new Map<number, string>()
+
+  public readonly queue = new PQueue({ concurrency: 1 })
+
   private lastAllocatedPort = NaN
 
   public constructor(

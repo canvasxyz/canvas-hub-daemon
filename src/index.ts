@@ -1,16 +1,13 @@
-import http from "node:http"
-
 import { EthereumChainImplementation } from "@canvas-js/chain-ethereum"
 import { ChainImplementation } from "@canvas-js/interfaces"
 import { ethers } from "ethers"
 
 import { Daemon } from "./daemon.js"
-import { StatusCodes } from "http-status-codes"
+import { attachProxyServer } from "./proxy.js"
 
 const chains: ChainImplementation[] = []
 
-const { FLY_APP_NAME, ETH_CHAIN_ID, ETH_CHAIN_RPC, PORT, PROXY_PORT } =
-  process.env
+const { FLY_APP_NAME, ETH_CHAIN_ID, ETH_CHAIN_RPC, PORT, PROXY_PORT } = process.env
 
 console.log(`[canvas-hub-daemon] Starting canvas-hub daemon, FLY_APP_NAME=${FLY_APP_NAME}, PORT=${PORT}, PROXY_PORT=${PROXY_PORT}`)
 
@@ -39,59 +36,7 @@ controller.signal.addEventListener("abort", () => {
 
 // start the websocket proxy server
 if (FLY_APP_NAME !== undefined && PROXY_PORT !== undefined) {
-  const server = http.createServer((req, res) =>
-    res.writeHead(StatusCodes.BAD_REQUEST).end()
-  )
-  server.on("upgrade", (req, reqSocket) => {
-    const {
-      host: _,
-      "fly-forwarded-port": originPort,
-      ...headers
-    } = req.headers
-
-    if (typeof originPort !== "string") {
-      reqSocket.end()
-      return
-    }
-
-    const proxyReq = http.request({
-      host: "localhost",
-      port: parseInt(originPort),
-      headers,
-    })
-
-    proxyReq.end()
-    proxyReq.on("upgrade", (proxyRes, resSocket, head) => {
-      console.log(`[canvas-hub-daemon] proxyReq upgrade message on port ${originPort}, statusCode=${proxyRes.statusCode}`)
-      if (proxyRes.statusCode) {
-        reqSocket.write("HTTP/1.1 101 Web Socket Protocol Handshake\r\n")
-        proxyRes.rawHeaders.forEach((rawHeader, i) =>
-          reqSocket.write(i % 2 === 0 ? `${rawHeader}: ` : `${rawHeader}\r\n`)
-        )
-        reqSocket.write("\r\n")
-        reqSocket.pipe(resSocket).pipe(reqSocket)
-      } else {
-        resSocket.end()
-        reqSocket.end()
-      }
-    })
-    proxyReq.on("error", (e) => {
-      console.log(`[canvas-hub-daemon] error thrown by proxyReq:`)
-      console.log(e)
-    })
-  })
-
-  server.listen(parseInt(PROXY_PORT), () =>
-    console.log(
-      `[canvas-hub-daemon] Proxy server listening on http://localhost:${PROXY_PORT}`
-    )
-  )
-
-  controller.signal.addEventListener("abort", () => {
-    console.log("[canvas-hub-daemon] Received abort signal, closing server")
-    server.close()
-    server.closeAllConnections()
-  })
+  attachProxyServer(parseInt(PROXY_PORT), (originPort) => daemon.portMap.has(originPort), controller.signal)
 }
 
 let stopping = false
