@@ -1,4 +1,4 @@
-# fly.toml file generated for canvas-hub-daemon on 2022-12-19T10:47:10-05:00
+# fly.toml file generated for canvas-hub-daemon on 2023-03-20T12:53:39Z
 
 app = "canvas-hub-daemon"
 kill_signal = "SIGINT"
@@ -6,19 +6,19 @@ kill_timeout = 30
 processes = []
 
 [env]
+  CANVAS_HOME = "/data"
+  END_PORT = "57344"
   PORT = "8000"
   PROXY_PORT = "8001"
   START_PORT = "49152"
-  END_PORT = "57344"
-  CANVAS_HOME = "/data"
-
-[mounts]
-  source = "data"
-  destination = "/data"
 
 [metrics]
   path = "/metrics"
   port = 8000
+
+[mounts]
+  destination = "/data"
+  source = "data"
 
 [[services]]
   internal_port = 8001
@@ -30,6 +30,6 @@ processes = []
     type = "connections"
 
   [[services.ports]]
+    end_port = 57344
     handlers = ["http"]
     start_port = 49152
-    end_port = 57344
