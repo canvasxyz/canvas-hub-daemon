@@ -1,23 +1,27 @@
 import http from "node:http"
 import fs from "node:fs"
 import path from "node:path"
+import dns from "node:dns/promises"
+import stream from "node:stream"
 
 import { StatusCodes } from "http-status-codes"
+import { WebSocketServer } from "ws"
 import express from "express"
-import winston from "winston"
-import expressWinston from "express-winston"
+// import winston from "winston"
+// import expressWinston from "express-winston"
 import cors from "cors"
 import stoppable from "stoppable"
 import Hash from "ipfs-only-hash"
 import PQueue from "p-queue"
 import client from "prom-client"
 
-import { Core, getAPI, CoreOptions } from "@canvas-js/core"
+import type { ChainImplementation, Model } from "@canvas-js/interfaces"
+import { Core, CoreOptions } from "@canvas-js/core"
+import { getAPI, handleWebsocketConnection } from '@canvas-js/core/api'
 import { VM } from "@canvas-js/core/components/vm"
 import { SPEC_FILENAME } from "@canvas-js/core/constants"
-import type { ChainImplementation, Model } from "@canvas-js/interfaces"
 
-import { CANVAS_HOME } from "./utils.js"
+import { CANVAS_HOME, rejectRequest } from "./utils.js"
 
 type Status = "running" | "stopped"
 
@@ -31,6 +35,18 @@ type AppData = {
 }
 
 const { FLY_APP_NAME, START_PORT, END_PORT } = process.env
+
+let privateAddress: string | undefined = undefined
+if (FLY_APP_NAME !== undefined) {
+  try {
+    const records = await dns.resolve6(`${FLY_APP_NAME}.internal`)
+    if (records.length > 0) {
+      privateAddress = records[0]
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
 
 export class Daemon {
   public readonly app = express()
@@ -47,23 +63,24 @@ export class Daemon {
 
   public constructor(
     private readonly chains: ChainImplementation[],
+    private readonly port: number,
     options: CoreOptions
   ) {
     this.app.use(express.json())
     this.app.use(express.text())
     this.app.use(cors())
 
-    this.app.use(
-      expressWinston.logger({
-        transports: [new winston.transports.Console()],
-        format: winston.format.simple(),
-        colorize: false,
+    // this.app.use(
+    //   expressWinston.logger({
+    //     transports: [new winston.transports.Console()],
+    //     format: winston.format.simple(),
+    //     colorize: false,
 
-        // /app/ is noisy, so don't log it
-        ignoreRoute: (req, res) =>
-          req.path === "/app/" && res.statusCode == StatusCodes.OK,
-      })
-    )
+    //     // /app/ is noisy, so don't log it
+    //     ignoreRoute: (req, res) =>
+    //       req.path === "/app/" && res.statusCode == StatusCodes.OK,
+    //   })
+    // )
 
     this.app.get("/app", (req, res) => {
       this.queue.add(async () => {
@@ -161,29 +178,34 @@ export class Daemon {
 
         const spec = fs.readFileSync(specPath, "utf-8")
 
-        try {
-          let listen: number | undefined = undefined
-          let announce: string[] | undefined = undefined
-          if (FLY_APP_NAME && START_PORT && END_PORT) {
-            const [start, end] = [parseInt(START_PORT), parseInt(END_PORT)]
-            listen = this.lastAllocatedPort || start
-            let loop = false
-            while (this.portMap.has(listen)) {
-              listen += 1
-              if (listen > end) {
-                if (loop) {
-                  throw new Error("could not assign port")
-                } else {
-                  loop = true
-                  listen = start
-                }
+        let port: number | undefined = undefined
+        let listen: string[] | undefined = undefined
+        let announce: string[] | undefined = undefined
+        if (FLY_APP_NAME && START_PORT && END_PORT) {
+          const [start, end] = [parseInt(START_PORT), parseInt(END_PORT)]
+          port = this.lastAllocatedPort || start
+          let loop = false
+          while (this.portMap.has(port)) {
+            port += 1
+            if (port > end) {
+              if (loop) {
+                throw new Error("could not assign port")
+              } else {
+                loop = true
+                port = start
               }
             }
-
-            this.lastAllocatedPort = listen
-            announce = [`/dns4/${FLY_APP_NAME}.fly.dev/tcp/${listen}/ws`]
           }
 
+          this.lastAllocatedPort = port
+          listen = [`/ip6/::/tcp/${port}/ws`]
+          announce = [`/dns4/${FLY_APP_NAME}.fly.dev/tcp/${port}/wss`]
+          if (privateAddress !== undefined) {
+            announce.push(`/ip6/${privateAddress}/tcp/${port}/ws`)
+          }
+        }
+
+        try {
           const core = await Core.initialize({
             directory,
             spec,
@@ -192,6 +214,7 @@ export class Daemon {
             announce,
             ...options,
           })
+
           console.log(`[canvas-hub-daemon] Started ${name} (${core.app})`)
 
           const api = getAPI(core, {
@@ -200,9 +223,9 @@ export class Daemon {
             exposeMessages: true,
           })
 
-          this.apps.set(name, { port: listen, core, api })
-          if (listen) {
-            this.portMap.set(listen, name)
+          this.apps.set(name, { port, core, api })
+          if (port) {
+            this.portMap.set(port, name)
           }
 
           res.status(StatusCodes.OK).end()
@@ -294,15 +317,43 @@ export class Daemon {
     })
 
     this.server = stoppable(http.createServer(this.app))
-  }
 
-  public listen(port: number) {
-    this.server.listen(port, () => {
+    const wss = new WebSocketServer({ noServer: true })
+    this.server.on("upgrade", (req: http.IncomingMessage, socket: stream.Duplex, head: Buffer) => {
+      if (req.url === undefined) {
+        return
+      }
+
+      const url = new URL(req.url, `http://127.0.0.1:${this.port}`)
+      const pathPattern = /^\/app\/([^\/]+)$/
+      const pathPatternResult = pathPattern.exec(url.pathname)
+      if (pathPatternResult === null) {
+        console.log("[canvas-hub-daemon] rejecting incoming WS connection at unexpected path", url.pathname)
+        rejectRequest(socket, StatusCodes.NOT_FOUND)
+        return
+      }
+
+      const [_, name] = pathPatternResult
+
+      const app = this.apps.get(name)
+      if (app === undefined) {
+        rejectRequest(socket, StatusCodes.NOT_FOUND)
+        return
+      }
+
+      const { core } = app
+      wss.handleUpgrade(req, socket, head, (socket) => {
+        handleWebsocketConnection(core, socket)
+      })
+    })
+
+    this.server.listen(this.port, () => {
       console.log(
-        `[canvas-hub-daemon] Serving Daemon API on http://127.0.0.1:${port}/`
+        `[canvas-hub-daemon] Serving Daemon API on http://127.0.0.1:${this.port}/`
       )
     })
   }
+
 
   public async close() {
     console.log("[canvas-hub-daemon] Waiting for queue to clear")

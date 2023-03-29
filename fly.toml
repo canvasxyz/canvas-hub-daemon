@@ -9,7 +9,7 @@ processes = []
   CANVAS_HOME = "/data"
   END_PORT = "57344"
   PORT = "8000"
-  PROXY_PORT = "8001"
+  PROXY_PORT = "8080"
   START_PORT = "49152"
 
 [metrics]
@@ -21,15 +21,15 @@ processes = []
   source = "data"
 
 [[services]]
-  internal_port = 8001
+  internal_port = 8080
   processes = ["app"]
   protocol = "tcp"
+
   [services.concurrency]
     hard_limit = 1000
     soft_limit = 100
     type = "connections"
 
   [[services.ports]]
-    end_port = 57344
-    handlers = ["http"]
+    handlers = ["tls", "http"]
     start_port = 49152

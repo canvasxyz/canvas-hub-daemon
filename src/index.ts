@@ -23,12 +23,12 @@ if (ETH_CHAIN_ID && ETH_CHAIN_RPC) {
 
 const controller = new AbortController()
 
-const daemon = new Daemon(chains, {
+const daemon = new Daemon(chains, PORT ? parseInt(PORT) : 8000, {
   verbose: true,
   unchecked: !chains.some((chain) => chain.hasProvider()),
 })
 
-daemon.listen(PORT ? parseInt(PORT) : 8000)
+
 controller.signal.addEventListener("abort", () => {
   console.log("[canvas-hub-daemon] Received abort signal, closing daemon")
   daemon.close()

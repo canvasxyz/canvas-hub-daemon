@@ -1,7 +1,7 @@
 import http from "node:http"
-import stream from "node:stream"
 
-import { StatusCodes, getReasonPhrase } from "http-status-codes"
+import { StatusCodes } from "http-status-codes"
+import { rejectRequest } from "./utils.js"
 
 export function attachProxyServer(proxyPort: number, connectionGater: (originPort: number) => boolean, signal: AbortSignal) {
   const server = http.createServer((req, res) =>
@@ -44,10 +44,9 @@ export function attachProxyServer(proxyPort: number, connectionGater: (originPor
       reqSocket.pipe(resSocket).pipe(reqSocket)
     })
 
-    proxyReq.on("error", (e) => {
-      console.log(`[canvas-hub-daemon] error thrown by proxyReq:`)
-      console.log(e)
-      rejectRequest(reqSocket, StatusCodes.BAD_GATEWAY)
+    proxyReq.on("error", (err) => {
+      console.log(`[canvas-hub-daemon] error thrown by proxyReq`, err)
+      reqSocket.end()
     })
   })
 
@@ -64,10 +63,3 @@ export function attachProxyServer(proxyPort: number, connectionGater: (originPor
   })
 }
 
-function rejectRequest(reqSocket: stream.Duplex, code: number) {
-  const date = new Date()
-  reqSocket.write(`HTTP/1.1 ${code} ${getReasonPhrase(code)}\r\n`)
-  reqSocket.write(`Date: ${date.toUTCString()}\r\n`)
-  reqSocket.write(`\r\n`)
-  reqSocket.end()
-}
