@@ -7,10 +7,10 @@ processes = []
 
 [env]
   CANVAS_HOME = "/data"
-  END_PORT = "57344"
   PORT = "8000"
   PROXY_PORT = "8080"
   START_PORT = "49152"
+  END_PORT = "57344"
 
 [metrics]
   path = "/metrics"
@@ -33,3 +33,4 @@ processes = []
   [[services.ports]]
     handlers = ["tls", "http"]
     start_port = 49152
+    end_port = 57344
