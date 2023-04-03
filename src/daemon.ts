@@ -7,8 +7,6 @@ import stream from "node:stream"
 import { StatusCodes } from "http-status-codes"
 import { WebSocketServer } from "ws"
 import express from "express"
-// import winston from "winston"
-// import expressWinston from "express-winston"
 import cors from "cors"
 import stoppable from "stoppable"
 import Hash from "ipfs-only-hash"
@@ -342,9 +340,7 @@ export class Daemon {
       }
 
       const { core } = app
-      wss.handleUpgrade(req, socket, head, (socket) => {
-        handleWebsocketConnection(core, socket)
-      })
+      wss.handleUpgrade(req, socket, head, (socket) => handleWebsocketConnection(core, socket))
     })
 
     this.server.listen(this.port, () => {
