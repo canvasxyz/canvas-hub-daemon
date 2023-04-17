@@ -24,7 +24,6 @@ if (ETH_CHAIN_ID && ETH_CHAIN_RPC) {
 const controller = new AbortController()
 
 const daemon = new Daemon(chains, PORT ? parseInt(PORT) : 8000, {
-	verbose: true,
 	unchecked: !chains.some((chain) => chain.hasProvider()),
 })
 
