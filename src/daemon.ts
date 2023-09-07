@@ -13,13 +13,14 @@ import Hash from "ipfs-only-hash"
 import PQueue from "p-queue"
 import client from "prom-client"
 
-import type { ChainImplementation, Model } from "@canvas-js/interfaces"
-import { Core, CoreOptions } from "@canvas-js/core"
-import { getAPI, handleWebsocketConnection } from "@canvas-js/core/api"
-import { VM } from "@canvas-js/core/components/vm"
-import { SPEC_FILENAME } from "@canvas-js/core/constants"
+import { getAPI, handleWebsocketConnection } from "@canvas-js/core"
 
 import { CANVAS_HOME, rejectRequest } from "./utils.js"
+import { Signer } from "@canvas-js/interfaces"
+import { Canvas } from "@canvas-js/core"
+import { Model } from "@canvas-js/modeldb-interface"
+
+const SPEC_FILENAME = "spec.canvas.js"
 
 type Status = "running" | "stopped"
 
@@ -50,17 +51,13 @@ export class Daemon {
 	public readonly app = express()
 	public readonly server: http.Server & stoppable.WithStop
 	public readonly portMap = new Map<number, string>()
-	public readonly apps = new Map<string, { port?: number; core: Core; api: express.Express }>()
+	public readonly apps = new Map<string, { port?: number; core: Canvas; api: express.Express }>()
 
 	public readonly queue = new PQueue({ concurrency: 1 })
 
 	private lastAllocatedPort = NaN
 
-	public constructor(
-		private readonly chains: ChainImplementation[],
-		private readonly port: number,
-		options: CoreOptions
-	) {
+	public constructor(private readonly signers: Signer[], private readonly port: number) {
 		this.app.use(express.json())
 		this.app.use(express.text())
 		this.app.use(cors())
@@ -90,8 +87,8 @@ export class Daemon {
 
 						const app = this.apps.get(name)
 						if (app) {
-							const models = app.core.vm.getModels()
-							const actions = app.core.vm.getActions()
+							const models = app.core.db.models
+							const actions = Object.keys(app.core.actions || {})
 							apps[name] = { uri, cid, status: "running", models, actions }
 						} else {
 							apps[name] = { uri, cid, status: "stopped" }
@@ -106,6 +103,7 @@ export class Daemon {
 		})
 
 		this.app.put("/app/:name", (req, res) => {
+			console.log("...")
 			const { name } = req.params
 			if (typeof req.body !== "string") {
 				return res.status(StatusCodes.NOT_ACCEPTABLE).end()
@@ -163,7 +161,7 @@ export class Daemon {
 					return res.status(StatusCodes.NOT_FOUND).end()
 				}
 
-				const spec = fs.readFileSync(specPath, "utf-8")
+				const contract = fs.readFileSync(specPath, "utf-8")
 
 				let port: number | undefined = undefined
 				let listen: string[] | undefined = undefined
@@ -193,16 +191,16 @@ export class Daemon {
 				}
 
 				try {
-					const core = await Core.initialize({
-						directory,
-						spec,
-						chains: this.chains,
-						listen,
-						announce,
-						...options,
+					const core = await Canvas.initialize({
+						contract,
+						uri: `http://hostname/${name}`,
+						location: directory,
+						signers,
+						offline: false,
+						replay: false,
 					})
 
-					console.log(`[canvas-hub-daemon] Started ${name} (${core.app})`)
+					console.log(`[canvas-hub-daemon] Started ${name}`)
 
 					const api = getAPI(core, {
 						exposeModels: true,
@@ -237,7 +235,7 @@ export class Daemon {
 
 				try {
 					await app.core.close()
-					console.log(`[canvas-hub-daemon] Stopped ${name} (${app.core.app})`)
+					console.log(`[canvas-hub-daemon] Stopped ${name}`)
 					res.status(StatusCodes.OK).end()
 				} catch (err) {
 					if (err instanceof Error) {
@@ -276,8 +274,10 @@ export class Daemon {
 
 			this.queue.add(async () => {
 				try {
-					const result = await VM.validate(app)
-					res.status(StatusCodes.OK).json(result)
+					// const result = await VM.validate(app)
+					// TODO: Decide whether we want to update validate to support Canvas 2
+					// or deprecate it, or replace it with something else (like a linter/type checker)
+					res.status(StatusCodes.OK).json({ errors: [], warnings: [] })
 				} catch (err) {
 					// we return INTERNAL_SERVER_ERROR since validation errors shouldn't throw
 					if (err instanceof Error) {

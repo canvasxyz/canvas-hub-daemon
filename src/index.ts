@@ -1,11 +1,11 @@
-import { EthereumChainImplementation } from "@canvas-js/chain-ethereum"
-import { ChainImplementation } from "@canvas-js/interfaces"
 import { ethers } from "ethers"
 
 import { Daemon } from "./daemon.js"
 import { attachProxyServer } from "./proxy.js"
+import { Signer } from "@canvas-js/interfaces"
+import { SIWESigner } from "@canvas-js/chain-ethereum"
 
-const chains: ChainImplementation[] = []
+const chains: Signer[] = []
 
 const { FLY_APP_NAME, ETH_CHAIN_ID, ETH_CHAIN_RPC, PORT, PROXY_PORT } = process.env
 
@@ -15,17 +15,16 @@ console.log(
 
 if (ETH_CHAIN_ID && ETH_CHAIN_RPC) {
 	const provider = new ethers.providers.JsonRpcProvider(ETH_CHAIN_RPC)
-	chains.push(new EthereumChainImplementation(parseInt(ETH_CHAIN_ID), "localhost", provider))
+
+	chains.push(await SIWESigner.init({}))
 	console.log(`[canvas-hub-daemon] Using Ethereum RPC for chain ID ${ETH_CHAIN_ID}: ${ETH_CHAIN_RPC}`)
 } else {
-	chains.push(new EthereumChainImplementation())
+	chains.push(await SIWESigner.init({}))
 }
 
 const controller = new AbortController()
 
-const daemon = new Daemon(chains, PORT ? parseInt(PORT) : 8000, {
-	unchecked: !chains.some((chain) => chain.hasProvider()),
-})
+const daemon = new Daemon(chains, PORT ? parseInt(PORT) : 8000)
 
 controller.signal.addEventListener("abort", () => {
 	console.log("[canvas-hub-daemon] Received abort signal, closing daemon")
