@@ -18,20 +18,16 @@ import { getAPI, handleWebsocketConnection } from "@canvas-js/core"
 import { CANVAS_HOME, rejectRequest } from "./utils.js"
 import { Signer } from "@canvas-js/interfaces"
 import { Canvas } from "@canvas-js/core"
-import { Model } from "@canvas-js/modeldb-interface"
+import { ApplicationData } from "@canvas-js/core/lib/Canvas.js"
 
 const SPEC_FILENAME = "spec.canvas.js"
 
-type Status = "running" | "stopped"
-
-type AppData = {
-	uri: string
-	cid: string
-	status: Status
-	appName?: string
-	models?: Record<string, Model>
-	actions?: string[]
-}
+export type DaemonApplicationData =
+	| {
+			status: "running"
+			data: ApplicationData
+	  }
+	| { status: "stopped" }
 
 const { FLY_APP_NAME, START_PORT, END_PORT } = process.env
 
@@ -76,22 +72,20 @@ export class Daemon {
 
 		this.app.get("/app", (req, res) => {
 			this.queue.add(async () => {
-				const apps: Record<string, AppData> = {}
+				const apps: Record<string, DaemonApplicationData> = {}
 				for (const name of fs.readdirSync(CANVAS_HOME)) {
 					const specPath = path.resolve(CANVAS_HOME, name, SPEC_FILENAME)
 					if (name === ".keep") continue
 					if (fs.existsSync(specPath)) {
 						const spec = fs.readFileSync(specPath, "utf-8")
-						const cid = await Hash.of(spec)
-						const uri = `ipfs://${cid}`
 
 						const app = this.apps.get(name)
 						if (app) {
-							const models = app.core.db.models
-							const actions = Object.keys(app.core.actions || {})
-							apps[name] = { uri, cid, status: "running", models, actions }
+							// TODO: confusing name since the notion of "Application" doesn't exist in canvas core
+							const data = await app.core.getApplicationData()
+							apps[name] = { status: "running", data }
 						} else {
-							apps[name] = { uri, cid, status: "stopped" }
+							apps[name] = { status: "stopped" }
 						}
 					} else {
 						console.warn(`[canvas-core-daemon] unexpected file in home directory: ${name}`)
@@ -103,7 +97,6 @@ export class Daemon {
 		})
 
 		this.app.put("/app/:name", (req, res) => {
-			console.log("...")
 			const { name } = req.params
 			if (typeof req.body !== "string") {
 				return res.status(StatusCodes.NOT_ACCEPTABLE).end()
