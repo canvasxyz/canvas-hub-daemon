@@ -206,6 +206,8 @@ export class Daemon {
 						this.portMap.set(port, name)
 					}
 
+					await core.start()
+
 					res.status(StatusCodes.OK).end()
 				} catch (err) {
 					if (err instanceof Error) {
