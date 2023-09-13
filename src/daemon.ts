@@ -199,6 +199,7 @@ export class Daemon {
 						exposeModels: true,
 						exposeMetrics: false,
 						exposeMessages: true,
+						exposeP2P: true,
 					})
 
 					this.apps.set(name, { port, core, api })
