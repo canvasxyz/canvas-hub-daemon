@@ -2,23 +2,21 @@ import http from "node:http"
 import fs from "node:fs"
 import path from "node:path"
 import dns from "node:dns/promises"
-import stream from "node:stream"
 
 import { StatusCodes } from "http-status-codes"
-import { WebSocketServer } from "ws"
 import express from "express"
 import cors from "cors"
 import stoppable from "stoppable"
-import Hash from "ipfs-only-hash"
+
 import PQueue from "p-queue"
 import client from "prom-client"
 
-import { getAPI, handleWebsocketConnection } from "@canvas-js/core"
+import { getAPI } from "@canvas-js/core"
 
-import { CANVAS_HOME, rejectRequest } from "./utils.js"
+import { CANVAS_HOME } from "./utils.js"
 import { Signer } from "@canvas-js/interfaces"
 import { Canvas } from "@canvas-js/core"
-import { ApplicationData } from "@canvas-js/core/lib/Canvas.js"
+import { ApplicationData } from "@canvas-js/core"
 
 const SPEC_FILENAME = "spec.canvas.js"
 
@@ -300,33 +298,6 @@ export class Daemon {
 		})
 
 		this.server = stoppable(http.createServer(this.app))
-
-		const wss = new WebSocketServer({ noServer: true })
-		this.server.on("upgrade", (req: http.IncomingMessage, socket: stream.Duplex, head: Buffer) => {
-			if (req.url === undefined) {
-				return
-			}
-
-			const url = new URL(req.url, `http://127.0.0.1:${this.port}`)
-			const pathPattern = /^\/app\/([^\/]+)$/
-			const pathPatternResult = pathPattern.exec(url.pathname)
-			if (pathPatternResult === null) {
-				console.log("[canvas-hub-daemon] rejecting incoming WS connection at unexpected path", url.pathname)
-				rejectRequest(socket, StatusCodes.NOT_FOUND)
-				return
-			}
-
-			const [_, name] = pathPatternResult
-
-			const app = this.apps.get(name)
-			if (app === undefined) {
-				rejectRequest(socket, StatusCodes.NOT_FOUND)
-				return
-			}
-
-			const { core } = app
-			wss.handleUpgrade(req, socket, head, (socket) => handleWebsocketConnection(core, socket))
-		})
 
 		this.server.listen(this.port, () => {
 			console.log(`[canvas-hub-daemon] Serving Daemon API on http://127.0.0.1:${this.port}/`)
